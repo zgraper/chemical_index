@@ -179,6 +179,42 @@ def cmd_validate(db: str) -> None:
         sys.exit(1)
 
 
+@cli.command("serve")
+@click.option(
+    "--db",
+    default="index.sqlite",
+    show_default=True,
+    help="Path to the SQLite database file.",
+)
+@click.option("--host", default="127.0.0.1", show_default=True, help="Bind host.")
+@click.option("--port", default=8000, show_default=True, type=int, help="Bind port.")
+@click.option(
+    "--cache-dir",
+    default="data/labels",
+    show_default=True,
+    help="Directory for cached label PDFs.",
+)
+def cmd_serve(db: str, host: str, port: int, cache_dir: str) -> None:
+    """Start the FastAPI HTTP server."""
+    import os
+
+    try:
+        import uvicorn
+    except ImportError:
+        click.echo("uvicorn is required to run the server. Install it with: pip install uvicorn", err=True)
+        sys.exit(1)
+
+    db_path = Path(db)
+    if not db_path.exists():
+        click.echo(f"Database not found: {db}", err=True)
+        sys.exit(1)
+
+    os.environ["CHEMICAL_INDEX_DB"] = str(db_path.resolve())
+    os.environ["CHEMICAL_INDEX_CACHE_DIR"] = str(Path(cache_dir).resolve())
+    click.echo(f"Starting API server on http://{host}:{port}  (db={db_path.resolve()})")
+    uvicorn.run("chemical_index.api:app", host=host, port=port)
+
+
 @cli.command("extract-label")
 @click.argument("epa_reg_no")
 @click.option(
