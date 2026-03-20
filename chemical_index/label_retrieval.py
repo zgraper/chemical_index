@@ -63,6 +63,41 @@ def _pdf_cache_path(
     return Path(cache_dir) / safe_reg / f"{version_id}.pdf"
 
 
+def _sections_cache_path(
+    epa_reg_no: str,
+    version_id: int,
+    cache_dir: str | Path = _DEFAULT_CACHE_DIR,
+) -> Path:
+    """Return the local cache path for extracted label sections (JSON)."""
+    safe_reg = epa_reg_no.replace("/", "_")
+    return Path(cache_dir) / safe_reg / f"{version_id}.json"
+
+
+def _invalidate_stale_versions(
+    epa_reg_no: str,
+    current_version_id: int,
+    cache_dir: str | Path = _DEFAULT_CACHE_DIR,
+) -> None:
+    """Remove cached PDF and JSON files for version IDs other than *current_version_id*.
+
+    Called whenever a fresh product look-up reveals the current version so that
+    stale entries left behind by previous versions are evicted from the cache.
+    """
+    safe_reg = epa_reg_no.replace("/", "_")
+    reg_dir = Path(cache_dir) / safe_reg
+    if not reg_dir.exists():
+        return
+    for path in reg_dir.iterdir():
+        if path.suffix not in {".pdf", ".json"}:
+            continue
+        try:
+            vid = int(path.stem)
+        except ValueError:
+            continue
+        if vid != current_version_id:
+            path.unlink(missing_ok=True)
+
+
 def download_label(
     pdf_url: str,
     epa_reg_no: str,
@@ -132,6 +167,7 @@ def extract_label(
     """
     product: dict[str, Any] | None = None
     resolved_pdf_path: Path | None = None
+    version_id: int | None = None
 
     if pdf_path is not None:
         # Caller supplied a PDF directly – still try to get metadata
@@ -158,7 +194,19 @@ def extract_label(
                 error="No pdf_url stored for this product.",
             )
 
-        version_id: int = product["id"]
+        version_id = product["id"]
+
+        # Evict cached files that belong to a previous version.
+        _invalidate_stale_versions(epa_reg_no, version_id, cache_dir)
+
+        # Return cached sections immediately if available (skip re-parsing).
+        json_cache = _sections_cache_path(epa_reg_no, version_id, cache_dir)
+        if json_cache.exists():
+            cached: dict[str, Any] = json.loads(
+                json_cache.read_text(encoding="utf-8")
+            )
+            return enforce_safe_output(cached)
+
         resolved_pdf_path = download_label(
             stored_pdf_url, epa_reg_no, version_id, cache_dir
         )
@@ -173,6 +221,13 @@ def extract_label(
         "label_date": product.get("label_stamped_date") if product else None,
         "sections": sections,
     }
+
+    # Persist extracted sections to the JSON cache (normal flow only).
+    if version_id is not None:
+        json_cache = _sections_cache_path(epa_reg_no, version_id, cache_dir)
+        json_cache.parent.mkdir(parents=True, exist_ok=True)
+        json_cache.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+
     return enforce_safe_output(result)
 
 

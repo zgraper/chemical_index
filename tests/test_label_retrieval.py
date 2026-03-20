@@ -15,6 +15,8 @@ from chemical_index.label_retrieval import (
     get_latest_product,
     download_label,
     _pdf_cache_path,
+    _sections_cache_path,
+    _invalidate_stale_versions,
 )
 
 
@@ -230,3 +232,160 @@ def test_cli_extract_label_no_pdf_url(db):
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert "error" in data
+
+
+# ---------------------------------------------------------------------------
+# _sections_cache_path
+# ---------------------------------------------------------------------------
+
+
+def test_sections_cache_path(tmp_path):
+    path = _sections_cache_path("524-659", 42, tmp_path)
+    assert path == tmp_path / "524-659" / "42.json"
+
+
+def test_sections_cache_path_sanitises_slash(tmp_path):
+    path = _sections_cache_path("524/659", 1, tmp_path)
+    assert "/" not in path.name
+    assert "524_659" in str(path)
+
+
+# ---------------------------------------------------------------------------
+# _invalidate_stale_versions
+# ---------------------------------------------------------------------------
+
+
+def test_invalidate_stale_versions_removes_old_files(tmp_path):
+    """Old version PDF and JSON files are deleted; current version is kept."""
+    reg_dir = tmp_path / "524-659"
+    reg_dir.mkdir()
+    old_pdf = reg_dir / "1.pdf"
+    old_json = reg_dir / "1.json"
+    current_pdf = reg_dir / "2.pdf"
+    current_json = reg_dir / "2.json"
+    for f in (old_pdf, old_json, current_pdf, current_json):
+        f.write_bytes(b"data")
+
+    _invalidate_stale_versions("524-659", 2, tmp_path)
+
+    assert not old_pdf.exists()
+    assert not old_json.exists()
+    assert current_pdf.exists()
+    assert current_json.exists()
+
+
+def test_invalidate_stale_versions_no_cache_dir(tmp_path):
+    """Function does nothing when the product cache directory is absent."""
+    _invalidate_stale_versions("524-659", 1, tmp_path / "nonexistent")
+
+
+def test_invalidate_stale_versions_ignores_unknown_extensions(tmp_path):
+    """Files with unexpected extensions are left untouched."""
+    reg_dir = tmp_path / "524-659"
+    reg_dir.mkdir()
+    extra = reg_dir / "1.txt"
+    extra.write_bytes(b"data")
+
+    _invalidate_stale_versions("524-659", 2, tmp_path)
+
+    assert extra.exists()
+
+
+# ---------------------------------------------------------------------------
+# JSON sections caching inside extract_label
+# ---------------------------------------------------------------------------
+
+
+def _write_sections_cache(cache_dir, epa_reg_no, version_id, data):
+    path = _sections_cache_path(epa_reg_no, version_id, cache_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_extract_label_saves_sections_cache(db, tmp_path):
+    """extract_label should write a JSON cache file after parsing."""
+    cache_dir = tmp_path / "cache"
+    fake_pdf = b"%PDF-1.4 fake"
+    mock_response = MagicMock()
+    mock_response.read.return_value = fake_pdf
+    mock_response.__enter__ = lambda s: s
+    mock_response.__exit__ = MagicMock(return_value=False)
+
+    with patch("urllib.request.urlopen", return_value=mock_response):
+        with patch(
+            "chemical_index.label_retrieval.extract_text", return_value="text"
+        ):
+            with patch(
+                "chemical_index.label_retrieval.normalize_text", return_value="clean"
+            ):
+                with patch(
+                    "chemical_index.label_retrieval.extract_sections",
+                    return_value={"directions_for_use": "Apply carefully."},
+                ):
+                    extract_label("524-659", db, cache_dir=cache_dir)
+
+    product = get_latest_product("524-659", db)
+    json_cache = _sections_cache_path("524-659", product["id"], cache_dir)
+    assert json_cache.exists()
+    cached = json.loads(json_cache.read_text(encoding="utf-8"))
+    assert cached["epa_reg_no"] == "524-659"
+    assert cached["sections"]["directions_for_use"] == "Apply carefully."
+
+
+def test_extract_label_uses_sections_cache(db, tmp_path):
+    """extract_label should return cached sections without re-parsing."""
+    cache_dir = tmp_path / "cache"
+    product = get_latest_product("524-659", db)
+    version_id = product["id"]
+
+    cached_data = {
+        "epa_reg_no": "524-659",
+        "product_name": "Roundup PowerMAX 3",
+        "label_date": "2023-05-01",
+        "sections": {"directions_for_use": "Cached instruction."},
+    }
+    _write_sections_cache(cache_dir, "524-659", version_id, cached_data)
+
+    with patch("urllib.request.urlopen") as mock_open, patch(
+        "chemical_index.label_retrieval.extract_text"
+    ) as mock_parse:
+        result = extract_label("524-659", db, cache_dir=cache_dir)
+        mock_open.assert_not_called()
+        mock_parse.assert_not_called()
+
+    assert result["sections"]["directions_for_use"] == "Cached instruction."
+
+
+def test_extract_label_invalidates_old_version_cache(db, tmp_path):
+    """extract_label removes stale version files when the current version differs."""
+    cache_dir = tmp_path / "cache"
+    product = get_latest_product("524-659", db)
+    current_version_id = product["id"]
+    stale_version_id = current_version_id - 1
+
+    # Plant stale cache files for the previous version.
+    stale_pdf = _pdf_cache_path("524-659", stale_version_id, cache_dir)
+    stale_json = _sections_cache_path("524-659", stale_version_id, cache_dir)
+    stale_pdf.parent.mkdir(parents=True, exist_ok=True)
+    stale_pdf.write_bytes(b"old pdf")
+    stale_json.write_text(json.dumps({"stale": True}), encoding="utf-8")
+
+    fake_pdf = b"%PDF-1.4 current"
+    mock_response = MagicMock()
+    mock_response.read.return_value = fake_pdf
+    mock_response.__enter__ = lambda s: s
+    mock_response.__exit__ = MagicMock(return_value=False)
+
+    with patch("urllib.request.urlopen", return_value=mock_response):
+        with patch("chemical_index.label_retrieval.extract_text", return_value="sample text"):
+            with patch(
+                "chemical_index.label_retrieval.normalize_text", return_value="sample text"
+            ):
+                with patch(
+                    "chemical_index.label_retrieval.extract_sections",
+                    return_value={},
+                ):
+                    extract_label("524-659", db, cache_dir=cache_dir)
+
+    assert not stale_pdf.exists()
+    assert not stale_json.exists()
