@@ -10,6 +10,7 @@ from typing import Any
 from .schema import get_connection
 from .pdf_parser import extract_text, normalize_text
 from .section_extractor import extract_sections
+from .safety import enforce_safe_output
 
 
 # ---------------------------------------------------------------------------
@@ -166,12 +167,13 @@ def extract_label(
     clean_text = normalize_text(raw_text)
     sections = extract_sections(clean_text)
 
-    return {
+    result = {
         "epa_reg_no": epa_reg_no,
         "product_name": product.get("product_name") if product else None,
         "label_date": product.get("label_stamped_date") if product else None,
         "sections": sections,
     }
+    return enforce_safe_output(result)
 
 
 def _empty_result(
