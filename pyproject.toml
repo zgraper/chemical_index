@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chemical_index"
+version = "0.1.0"
+description = "Chemical label metadata index and retrieval proof of concept for Cornbelt AI"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "click>=8.1",
+]
+
+[project.scripts]
+chemical-index = "chemical_index.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["chemical_index*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,42 @@
+[
+  {
+    "query": "524-308",
+    "mode": "epa_reg_no",
+    "expected_epa_reg_no": "524-308"
+  },
+  {
+    "query": "Roundup Original",
+    "mode": "product_name",
+    "expected_epa_reg_no": "524-308"
+  },
+  {
+    "query": "roundup",
+    "mode": "fuzzy",
+    "expected_epa_reg_no": "524-308"
+  },
+  {
+    "query": "Glyphosate",
+    "mode": "active_ingredient",
+    "expected_epa_reg_no": "524-308"
+  },
+  {
+    "query": "Corteva",
+    "mode": "registrant",
+    "expected_epa_reg_no": "100-1070"
+  },
+  {
+    "query": "Enlist",
+    "mode": "fuzzy",
+    "expected_epa_reg_no": "100-1070"
+  },
+  {
+    "query": "Chlorpyrifos",
+    "mode": "active_ingredient",
+    "expected_epa_reg_no": "352-664"
+  },
+  {
+    "query": "Lorsban",
+    "mode": "fuzzy",
+    "expected_epa_reg_no": "352-664"
+  }
+]
