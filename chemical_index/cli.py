@@ -12,6 +12,7 @@ from .build_index import build_index
 from .sync_index import sync_index
 from .search import search, MODES
 from .retrieval import run_evaluation, export_json, export_csv, format_terminal_summary
+from .validate import validate_database
 
 
 @click.group()
@@ -155,3 +156,23 @@ def cmd_evaluate(
     export_json(evaluation, out_json)
     export_csv(evaluation, out_csv)
     click.echo(f"Reports written to {out_json} and {out_csv}")
+
+
+@cli.command("validate")
+@click.option(
+    "--db",
+    default="index.sqlite",
+    show_default=True,
+    help="Path to the SQLite database file.",
+)
+def cmd_validate(db: str) -> None:
+    """Check database integrity and print a validation report."""
+    db_path = Path(db)
+    if not db_path.exists():
+        click.echo(f"Database not found: {db}", err=True)
+        sys.exit(1)
+
+    report = validate_database(db_path)
+    click.echo(json.dumps(report, indent=2))
+    if not report["valid"]:
+        sys.exit(1)
