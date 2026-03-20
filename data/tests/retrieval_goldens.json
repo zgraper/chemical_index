@@ -1,0 +1,56 @@
+[
+  {
+    "query": "524-308",
+    "expected_epa_reg_no": "524-308",
+    "expected_product_name": "Roundup Original",
+    "match_type": "epa_reg_no"
+  },
+  {
+    "query": "Roundup Original",
+    "expected_epa_reg_no": "524-308",
+    "expected_product_name": "Roundup Original",
+    "match_type": "product_name"
+  },
+  {
+    "query": "roundup",
+    "expected_epa_reg_no": "524-308",
+    "expected_product_name": "Roundup Original",
+    "match_type": "fuzzy"
+  },
+  {
+    "query": "Glyphosate",
+    "expected_epa_reg_no": "524-308",
+    "match_type": "active_ingredient"
+  },
+  {
+    "query": "Corteva",
+    "expected_epa_reg_no": "100-1070",
+    "match_type": "registrant"
+  },
+  {
+    "query": "Enlist One Herbicide",
+    "expected_epa_reg_no": "100-1070",
+    "expected_product_name": "Enlist One Herbicide",
+    "match_type": "product_name"
+  },
+  {
+    "query": "Enlist",
+    "expected_epa_reg_no": "100-1070",
+    "match_type": "fuzzy"
+  },
+  {
+    "query": "Chlorpyrifos",
+    "expected_epa_reg_no": "352-664",
+    "match_type": "active_ingredient"
+  },
+  {
+    "query": "Lorsban",
+    "expected_epa_reg_no": "352-664",
+    "match_type": "fuzzy"
+  },
+  {
+    "query": "lambda-Cyhalothrin",
+    "expected_epa_reg_no": "62719-397",
+    "match_type": "active_ingredient"
+  }
+]

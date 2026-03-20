@@ -46,8 +46,13 @@ def _fuzzy_score(query: str, candidate: str | None) -> float:
     return len(intersection) / len(union)
 
 
-def _build_result(row: dict, score: float, explain: str) -> dict:
-    return {**row, "score": round(score, 4), "explain": explain}
+def _build_result(
+    row: dict,
+    score: float,
+    explain: str,
+    match_source: str = "",
+) -> dict:
+    return {**row, "score": round(score, 4), "explain": explain, "match_source": match_source}
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +80,7 @@ def search_by_epa_reg_no(
     for row in rows:
         d = _row_to_dict(row)
         results.append(
-            _build_result(d, 1.0, f"Exact EPA reg no match: {query!r}")
+            _build_result(d, 1.0, f"Exact EPA reg no match: {query!r}", "exact_epa_reg_no")
         )
     return results
 
@@ -101,7 +106,7 @@ def search_by_product_name(
         d = _row_to_dict(row)
         results.append(
             _build_result(
-                d, 1.0, f"Exact product name match: {query!r}"
+                d, 1.0, f"Exact product name match: {query!r}", "normalized_exact_name"
             )
         )
     return results
@@ -125,19 +130,21 @@ def search_by_fuzzy(
         "SELECT * FROM product_versions WHERE is_latest = 1"
     ).fetchall()
 
-    scored: list[tuple[float, str, dict]] = []
+    scored: list[tuple[float, str, str, dict]] = []
     q_tokens = _tokenise(query)
 
     for row in rows:
         d = _row_to_dict(row)
         best_score = 0.0
         best_reason = ""
+        best_source = ""
 
         # Score against product_name
         name_score = _fuzzy_score(query, d.get("product_name"))
         if name_score > best_score:
             best_score = name_score
             best_reason = f"Fuzzy product name match (score={name_score:.3f}): {query!r} ~ {d.get('product_name')!r}"
+            best_source = "fuzzy_name_score"
 
         # Score against each alternate name
         for alt in (d.get("alternate_names") or []):
@@ -145,6 +152,7 @@ def search_by_fuzzy(
             if s > best_score:
                 best_score = s
                 best_reason = f"Fuzzy alternate name match (score={s:.3f}): {query!r} ~ {alt!r}"
+                best_source = "alias"
 
         # Partial credit if query tokens appear in active ingredients
         ais = d.get("active_ingredients") or []
@@ -155,14 +163,15 @@ def search_by_fuzzy(
             if overlap > best_score:
                 best_score = overlap * 0.8  # discount AI matches
                 best_reason = f"Active ingredient token match (score={best_score:.3f}): {query!r}"
+                best_source = "ingredient_keyword"
 
         if best_score >= threshold:
-            scored.append((best_score, best_reason, d))
+            scored.append((best_score, best_reason, best_source, d))
 
     scored.sort(key=lambda x: x[0], reverse=True)
     return [
-        _build_result(d, score, reason)
-        for score, reason, d in scored[:top]
+        _build_result(d, score, reason, source)
+        for score, reason, source, d in scored[:top]
     ]
 
 
@@ -193,6 +202,7 @@ def search_by_active_ingredient(
                         d,
                         1.0,
                         f"Active ingredient match: {query!r} in {name!r}",
+                        "ingredient_keyword",
                     )
                 )
                 break  # one result per product
@@ -225,6 +235,7 @@ def search_by_registrant(
                 d,
                 1.0,
                 f"Registrant match: {query!r} in {d.get('registrant')!r}",
+                "registrant_keyword",
             )
         )
     return results
