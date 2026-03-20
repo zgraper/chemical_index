@@ -124,3 +124,42 @@ def test_validate_command_no_db(env, tmp_path):
     runner, _, _, _, _ = env
     result = runner.invoke(cli, ["validate", "--db", str(tmp_path / "missing.sqlite")])
     assert result.exit_code == 1
+
+
+def test_demo_command_terminal(env):
+    runner, source, db, _, _ = env
+    runner.invoke(cli, ["build-index", "--source", source, "--db", db])
+    result = runner.invoke(cli, ["demo", "roundup", "--db", db])
+    assert result.exit_code == 0, result.output
+    assert "CHEMICAL LABEL DEMO" in result.output
+    assert "Top Matches" in result.output
+    assert "Product Metadata" in result.output
+    assert "DISCLAIMER" in result.output
+    assert "Roundup" in result.output
+
+
+def test_demo_command_json(env):
+    runner, source, db, _, _ = env
+    runner.invoke(cli, ["build-index", "--source", source, "--db", db])
+    result = runner.invoke(cli, ["demo", "roundup", "--db", db, "--json-output"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert "query" in data
+    assert data["query"] == "roundup"
+    assert "top_results" in data
+    assert len(data["top_results"]) >= 1
+    assert "selected" in data
+    assert "disclaimer" in data
+
+
+def test_demo_command_no_db(env, tmp_path):
+    runner, _, _, _, _ = env
+    result = runner.invoke(cli, ["demo", "roundup", "--db", str(tmp_path / "missing.sqlite")])
+    assert result.exit_code == 1
+
+
+def test_demo_command_no_results(env):
+    runner, source, db, _, _ = env
+    runner.invoke(cli, ["build-index", "--source", source, "--db", db])
+    result = runner.invoke(cli, ["demo", "zzznomatchxxx", "--db", db])
+    assert result.exit_code == 1
