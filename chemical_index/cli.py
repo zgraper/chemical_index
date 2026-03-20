@@ -11,7 +11,7 @@ import click
 from .build_index import build_index
 from .sync_index import sync_index
 from .search import search, MODES
-from .retrieval import run_evaluation, export_json, export_csv
+from .retrieval import run_evaluation, export_json, export_csv, format_terminal_summary
 
 
 @click.group()
@@ -150,12 +150,7 @@ def cmd_evaluate(
     evaluation = run_evaluation(test_cases, db_path, top=top)
     metrics = evaluation["metrics"]
 
-    click.echo(
-        f"Results: total={metrics['total_cases']}  "
-        f"top-1={metrics['top_1_accuracy']:.2%}  "
-        f"top-3={metrics['top_3_accuracy']:.2%}  "
-        f"MRR={metrics['mrr']:.4f}"
-    )
+    click.echo(format_terminal_summary(evaluation))
 
     export_json(evaluation, out_json)
     export_csv(evaluation, out_csv)

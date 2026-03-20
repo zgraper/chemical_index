@@ -106,6 +106,6 @@ def test_evaluate_command(env):
         ],
     )
     assert result.exit_code == 0, result.output
-    assert "top-1" in result.output
+    assert "Top-1 accuracy" in result.output
     assert Path(out_json).exists()
     assert Path(out_csv).exists()
