@@ -44,3 +44,16 @@ def hash_record(normalised: dict) -> str:
 def hash_string(text: str) -> str:
     """Return SHA-256 hex digest of an arbitrary string."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def compare_source_hashes(hash1: str | None, hash2: str | None) -> bool:
+    """
+    Return ``True`` if both hashes are non-``None`` and equal.
+
+    This is the canonical way to test whether a stored source hash matches a
+    freshly-computed one; it guards against ``None`` comparisons that would
+    incorrectly signal "unchanged".
+    """
+    if hash1 is None or hash2 is None:
+        return False
+    return hash1 == hash2

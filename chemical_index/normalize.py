@@ -80,6 +80,21 @@ def normalize_active_ingredients(value: Any) -> list[dict]:
     return result
 
 
+def normalize_product_name(value: Any) -> str | None:
+    """
+    Return a normalized product name: stripped and internal-whitespace-collapsed.
+
+    Unlike :func:`normalize_string`, consecutive whitespace characters inside
+    the string are reduced to a single space so that formatting artefacts in
+    source data do not produce unequal names.  Returns ``None`` if the result
+    is empty.
+    """
+    if value is None:
+        return None
+    s = " ".join(str(value).split())
+    return s if s else None
+
+
 def normalize_record(raw: dict) -> dict:
     """
     Normalize a raw source dict into a canonical product metadata dict.
@@ -89,7 +104,7 @@ def normalize_record(raw: dict) -> dict:
     """
     return {
         "epa_reg_no": normalize_epa_reg_no(raw.get("epa_reg_no")),
-        "product_name": normalize_string(raw.get("product_name")),
+        "product_name": normalize_product_name(raw.get("product_name")),
         "alternate_names": normalize_list(raw.get("alternate_names")),
         "registrant": normalize_string(raw.get("registrant")),
         "active_ingredients": normalize_active_ingredients(

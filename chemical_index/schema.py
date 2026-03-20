@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS product_versions (
     first_seen_at     TEXT    NOT NULL,
     last_seen_at      TEXT    NOT NULL,
     retrieved_at      TEXT    NOT NULL,
-    run_id            TEXT    NOT NULL
+    run_id            TEXT    NOT NULL,
+    absent_since      TEXT    -- set when product is not found in a sync run
 );
 """
 
@@ -68,4 +69,17 @@ def create_schema(db_path: str | Path) -> None:
             stmt = stmt.strip()
             if stmt:
                 conn.execute(stmt)
+        _migrate_schema(conn)
     conn.close()
+
+
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    """Apply any missing column migrations to an existing database."""
+    existing_cols = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(product_versions)").fetchall()
+    }
+    if "absent_since" not in existing_cols:
+        conn.execute(
+            "ALTER TABLE product_versions ADD COLUMN absent_since TEXT"
+        )

@@ -7,6 +7,7 @@ from chemical_index.normalize import (
     normalize_list,
     normalize_dict,
     normalize_active_ingredients,
+    normalize_product_name,
     normalize_record,
 )
 
@@ -83,3 +84,19 @@ def test_normalize_record_full():
     assert rec["registrant"] == "Bayer"
     assert rec["active_ingredients"] == [{"name": "Glyphosate", "pct": 41.0}]
     assert rec["state_status_flags"] == {"CA": "registered"}
+
+
+def test_normalize_product_name_strips_and_collapses():
+    assert normalize_product_name("  Roundup   Original  ") == "Roundup Original"
+
+
+def test_normalize_product_name_none():
+    assert normalize_product_name(None) is None
+
+
+def test_normalize_product_name_empty():
+    assert normalize_product_name("   ") is None
+
+
+def test_normalize_product_name_preserves_case():
+    assert normalize_product_name("2,4-D Choline Salt") == "2,4-D Choline Salt"

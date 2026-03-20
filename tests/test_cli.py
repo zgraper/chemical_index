@@ -109,3 +109,18 @@ def test_evaluate_command(env):
     assert "Top-1 accuracy" in result.output
     assert Path(out_json).exists()
     assert Path(out_csv).exists()
+
+
+def test_validate_command_valid(env):
+    runner, source, db, _, _ = env
+    runner.invoke(cli, ["build-index", "--source", source, "--db", db])
+    result = runner.invoke(cli, ["validate", "--db", db])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["valid"] is True
+
+
+def test_validate_command_no_db(env, tmp_path):
+    runner, _, _, _, _ = env
+    result = runner.invoke(cli, ["validate", "--db", str(tmp_path / "missing.sqlite")])
+    assert result.exit_code == 1
