@@ -13,6 +13,7 @@ from .sync_index import sync_index
 from .search import search, MODES
 from .retrieval import run_evaluation, export_json, export_csv, format_terminal_summary
 from .validate import validate_database
+from .label_retrieval import extract_label
 
 
 @click.group()
@@ -176,3 +177,44 @@ def cmd_validate(db: str) -> None:
     click.echo(json.dumps(report, indent=2))
     if not report["valid"]:
         sys.exit(1)
+
+
+@cli.command("extract-label")
+@click.argument("epa_reg_no")
+@click.option(
+    "--db",
+    default="index.sqlite",
+    show_default=True,
+    help="Path to the SQLite database file.",
+)
+@click.option(
+    "--cache-dir",
+    default="data/labels",
+    show_default=True,
+    help="Directory for cached label PDFs.",
+)
+@click.option(
+    "--pdf",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Use a local PDF file instead of downloading from the database.",
+)
+def cmd_extract_label(
+    epa_reg_no: str,
+    db: str,
+    cache_dir: str,
+    pdf: str | None,
+) -> None:
+    """Extract sections from the label PDF for EPA_REG_NO."""
+    db_path = Path(db)
+    if pdf is None and not db_path.exists():
+        click.echo(f"Database not found: {db}", err=True)
+        sys.exit(1)
+
+    result = extract_label(
+        epa_reg_no,
+        db_path,
+        cache_dir=cache_dir,
+        pdf_path=pdf,
+    )
+    click.echo(json.dumps(result, indent=2, ensure_ascii=False))
