@@ -1,0 +1,1 @@
+The concept is that Cornbelt AI will be able to pull information from labels and give it to farmers.  We figure the best way to do this is create an index, then pull the label if there is a query regarding it.
