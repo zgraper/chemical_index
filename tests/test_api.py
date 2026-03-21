@@ -354,3 +354,69 @@ def test_sections_route_is_distinct_from_label_route(client):
     assert sections_resp.status_code == 200
     # /label/{id} returns product_name; /label/{id}/sections does not require it
     assert "product_name" in label_resp.json()
+
+
+# ---------------------------------------------------------------------------
+# POST /resolve
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_exact_epa(client):
+    resp = client.post("/resolve", json={"epa_reg_no": "524-308"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["api_version"] == __version__
+    bm = data["best_match"]
+    assert bm is not None
+    assert bm["epa_reg_no"] == "524-308"
+    assert bm["match_type"] == "exact_epa_reg_no"
+    assert bm["overall_score"] == 1.0
+    assert bm["confidence"] == "high"
+
+
+def test_resolve_exact_name(client):
+    resp = client.post("/resolve", json={"product_name": "Roundup Original"})
+    assert resp.status_code == 200
+    bm = resp.json()["best_match"]
+    assert bm["epa_reg_no"] == "524-308"
+    assert bm["match_type"] == "exact_name"
+
+
+def test_resolve_returns_attempts(client):
+    resp = client.post("/resolve", json={"product_name": "Roundup"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data["attempts"], list)
+    assert len(data["attempts"]) >= 1
+
+
+def test_resolve_no_match(client):
+    resp = client.post("/resolve", json={"epa_reg_no": "999-NOTFOUND"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["best_match"] is None
+    assert data["attempts"] == []
+
+
+def test_resolve_best_match_has_required_keys(client):
+    resp = client.post("/resolve", json={"epa_reg_no": "100-1070"})
+    assert resp.status_code == 200
+    bm = resp.json()["best_match"]
+    for key in (
+        "epa_reg_no",
+        "match_score",
+        "match_type",
+        "confidence",
+        "name_similarity_score",
+        "ingredient_match_score",
+        "manufacturer_match_score",
+        "overall_score",
+    ):
+        assert key in bm, f"Missing key in best_match: {key}"
+
+
+def test_resolve_no_db_returns_503(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHEMICAL_INDEX_DB", str(tmp_path / "missing.sqlite"))
+    c = TestClient(app)
+    resp = c.post("/resolve", json={"product_name": "Roundup"})
+    assert resp.status_code == 503
