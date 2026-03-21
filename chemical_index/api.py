@@ -1,10 +1,11 @@
 """FastAPI layer for the chemical index.
 
-Exposes four endpoints:
-    GET /search?q=             – ranked product search
-    GET /product/{epa_reg_no}  – single product detail
-    GET /label/{epa_reg_no}    – full label (metadata + extracted sections)
-    GET /label/{epa_reg_no}/sections – extracted sections only
+Exposes five endpoints:
+    1. GET  /search?q=                   – ranked product search
+    2. GET  /product/{epa_reg_no}        – single product detail
+    3. GET  /label/{epa_reg_no}          – full label (metadata + extracted sections)
+    4. GET  /label/{epa_reg_no}/sections – extracted sections only
+    5. POST /resolve                     – match seed data to EPA products with confidence scoring
 
 Configuration (environment variables):
     CHEMICAL_INDEX_DB        – path to the SQLite database (required at runtime)
@@ -18,10 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 
 from . import __version__
 from .label_retrieval import extract_label, get_latest_product
 from .safety import DISCLAIMER, enforce_safe_output
+from .scoring import resolve_product
 from .search import MODES, search as _search
 
 _APP_DESCRIPTION = (
@@ -34,6 +37,23 @@ app = FastAPI(
     description=_APP_DESCRIPTION,
     version=__version__,
 )
+
+
+# ---------------------------------------------------------------------------
+# Request / response models
+# ---------------------------------------------------------------------------
+
+
+class ResolveRequest(BaseModel):
+    """Seed data used to resolve a match against EPA products."""
+
+    epa_reg_no: str | None = None
+    product_name: str | None = None
+    active_ingredients: list[dict[str, Any]] | None = None
+    registrant: str | None = None
+    manufacturer: str | None = None
+    top: int = 10
+    threshold: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -202,4 +222,29 @@ def label(epa_reg_no: str) -> dict[str, Any]:
         "source_url": source_url,
         "sections": label_data.get("sections"),
         "disclaimer": DISCLAIMER,
+    }
+
+
+@app.post("/resolve")
+def resolve(body: ResolveRequest) -> dict[str, Any]:
+    """Resolve seed product data to the best-matching EPA product.
+
+    Accepts partial product information (EPA reg no, product name, active
+    ingredients, registrant) and returns scored match candidates ranked by
+    confidence.  The ``best_match`` key contains the top result including
+    ``match_score``, ``match_type``, ``confidence``, and sub-scores.
+    """
+    db = _db_path()
+    seed = body.model_dump(exclude={"top", "threshold"}, exclude_none=True)
+    try:
+        result = resolve_product(
+            seed, db, top=body.top, threshold=body.threshold
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {
+        **_api_meta(),
+        "best_match": result["best_match"],
+        "attempts": result["attempts"],
     }
